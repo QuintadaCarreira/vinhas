@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registo de Videiras</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 15px; background: #f4f6f9; color: #333; }
+        h2 { text-align: center; color: #4A154B; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        select, input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 14px; background: #2eb872; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button.export { background: #118ab2; }
+        button.gps-btn { background: #ffb703; color: #000; margin-bottom: 10px; }
+        .log-container { margin-top: 25px; background: white; padding: 10px; border-radius: 8px; border: 1px solid #ddd; max-height: 200px; overflow-y: auto; }
+        .log-item { padding: 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <h2>🍇 Marcador de Videiras</h2>
+    
+    <div class="form-group">
+        <label>Talhão / Parcela:</label>
+        <select id="talhao">
+            <option value="Vinha Velha">Vinha Velha</option>
+            <option value="Talhão do Rio">Talhão do Rio</option>
+            <option value="Parcela Touriga">Parcela Touriga</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Número da Linha / Fila:</label>
+        <input type="number" id="linha" placeholder="Ex: 14" inputmode="numeric">
+    </div>
+
+    <div class="form-group">
+        <label>Problema Detetado:</label>
+        <select id="problema">
+            <option value="Seca / Morta">🔴 Seca / Morta</option>
+            <option value="Doente (Esca/Flavescência)">🟡 Doente (Esca/Flavescência)</option>
+            <option value="Falha / Vazia">⚪ Falha / Espaço Vazio</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Coordenadas GPS:</label>
+        <button class="gps-btn" onclick="obterGPS()">📍 Capturar Posição Atual</button>
+        <input type="text" id="gps" readonly placeholder="Aguardando GPS...">
+    </div>
+
+    <button onclick="salvarRegisto()">Gravar Videira</button>
+    <button class="export" onclick="exportarCSV()">📥 Exportar Dados para Excel (CSV)</button>
+
+    <h3>Registos Guardados no Telemóvel (<span id="contador">0</span>):</h3>
+    <div class="log-container" id="listaRegistos"></div>
+
+    <script>
+        // Inicializar armazenamento local (LocalStorage para simplicidade no browser)
+        let dadosGuardados = JSON.parse(localStorage.getItem('registosVideiras')) || [];
+        
+        function atualizarInterface() {
+            document.getElementById('contador').innerText = dadosGuardados.length;
+            const lista = document.getElementById('listaRegistos');
+            lista.innerHTML = '';
+            dadosGuardados.slice().reverse().forEach(item => {
+                lista.innerHTML += `<div class="log-item"><b>${item.talhao} - L${item.linha}</b>: ${item.problema} <br><small>${item.data} | GPS: ${item.gps}</small></div>`;
+            });
+        }
+
+        function obterGPS() {
+            const gpsInput = document.getElementById('gps');
+            gpsInput.placeholder = "A localizar...";
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        gpsInput.value = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+                    },
+                    (error) => {
+                        alert("Erro ao obter GPS. Certifique-se de que ativou a localização no telemóvel.");
+                        gpsInput.placeholder = "Erro no GPS";
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            } else {
+                alert("O seu telemóvel não suporta Geolocalização.");
+            }
+        }
+
+        function salvarRegisto() {
+            const talhao = document.getElementById('talhao').value;
+            const linha = document.getElementById('linha').value;
+            const problema = document.getElementById('problema').value;
+            const gps = document.getElementById('gps').value;
+
+            if (!linha || !gps) {
+                alert("Por favor, introduza o número da linha e capture a posição GPS antes de gravar.");
+                return;
+            }
+
+            const novoRegisto = {
+                id: Date.now(),
+                data: new Date().toLocaleString('pt-PT'),
+                talhao: talhao,
+                linha: linha,
+                problema: problema,
+                gps: gps
+            };
+
+            dadosGuardados.push(novoRegisto);
+            localStorage.setItem('registosVideiras', JSON.stringify(dadosGuardados));
+            
+            // Limpar apenas o campo da linha e GPS para o próximo registo rápido
+            document.getElementById('linha').value = '';
+            document.getElementById('gps').value = '';
+            
+            atualizarInterface();
+            alert("Videira marcada com sucesso!");
+        }
+
+        function exportarCSV() {
+            if (dadosGuardados.length === 0) {
+                alert("Não existem dados para exportar.");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "Data;Talhao;Linha;Problema;GPS\n";
+
+            dadosGuardados.forEach(item => {
+                csvContent += `"${item.data}";"${item.talhao}";"${item.linha}";"${item.problema}";"${item.gps}"\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `marcaplantas_8ha_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Carregar dados guardados ao abrir a app
+        atualizarInterface();
+    </script>
+</body>
+</html>
